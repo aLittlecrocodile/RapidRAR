@@ -1,0 +1,44 @@
+# 临时文件和缓存
+temp/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 本地配置和敏感数据
+*.rar
+password_found_*.txt
+.env
+config.local.py
+
+# 开发环境
+venv/
+env/
+spider/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 构建和编译文件
+build/
+dist/
+*.egg-info/
+*.so
+*.dll
+*.ptx
+*.cubin
+
+# 大型数据和字典文件
+*.dict
+*.txt
+!requirements.txt
+!LICENSE.txt
+!README.txt
+
+# 检查点和状态
+checkpoint.json
+*.state
+logs/
