@@ -38,15 +38,19 @@ cd rapidrar
 
 2. **安装依赖**
 ```bash
-# 推荐使用虚拟环境
-python -m venv venv
-# Windows
-.\venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
+# 推荐使用uv虚拟环境（更快的Python包管理工具）
+# 先安装uv
+pip install uv
 
-# 安装依赖
-pip install -r requirements.txt
+# 创建并激活虚拟环境
+uv venv
+# Windows
+.\.venv\Scripts\activate
+# Linux/Mac
+source .venv/bin/activate
+
+# 使用uv安装依赖
+uv pip install -r requirements.txt
 ```
 
 3. **安装UnRAR**
@@ -230,9 +234,7 @@ RapidRAR/
 
 有问题或建议？请在GitHub Issue中提出，或联系：
 
-- Email: your.email@example.com
-- GitHub: [Your GitHub Profile](https://github.com/yourusername)
-
+- Email: aooway@yeah.net
 ---
 
 <div align="center">
