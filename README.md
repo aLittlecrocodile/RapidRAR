@@ -22,57 +22,6 @@ I started this project to address the significant inefficiency of traditional CP
 This design decouples the computation logic from the hardware implementation. Currently, it supports cross-platform execution on both **NVIDIA GPUs** (CUDA) and **Apple Silicon** (NEON/Metal optimizations).
 
 ## 🏗️ Architecture
-
-The system implements a Host-Device co-design pattern:
-
-* **Host (CPU)**: Maintains a `ThreadPoolExecutor` to manage dictionary reading and mask space generation. Tasks are dispatched to the device in dynamic Batches.
-* **Device (GPU)**: Custom CUDA Kernels (`.cu`) operate directly on VRAM, utilizing **Zero-Copy** mechanisms to minimize PCIe transfer overhead.
-
-```mermaid
-flowchart TB
-    classDef plain fill:#fff,stroke:#333,stroke-width:1px;
-    classDef db fill:#eee,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5;
-    
-    start((Start)) --> input[CLI / Arguments]
-    input --> init[GPU Manager Init]
-    
-    subgraph Host [Host Context - Python]
-        direction TB
-        init --> batcher[Batch Generator]
-        batcher -->|1. Task Queue| thread[ThreadPool]
-    end
-
-    thread == "PCIe Bus (H2D)" ==> vram_in
-    
-    subgraph Device [Device Context - CUDA]
-        direction TB
-        vram_in[(VRAM Input)] --> kernel["CUDA Kernel (Parallel Hash)"]
-        kernel --> vram_out[(Result Bitmap)]
-    end
-    
-    vram_out == "PCIe Bus (D2H)" ==> filter
-    
-    subgraph Verify [Validation]
-        direction TB
-        filter{Candidate?}
-        check["UnRAR / CPU Verify"]
-    end
-    
-    filter -- Yes --> check
-    filter -- No --> batcher
-    
-    check -- Pass --> found((Password Found))
-    check -.->|False Positive| batcher
-
-    class input,init,batcher,thread,kernel,check,filter plain;
-    class vram_in,vram_out db;
-```
-
-## 💻 Implementation Details
-
-In this project, I focused on solving several key engineering challenges:
-
-  * **Zero-Copy Data Flow**:
     I utilized `PyCUDA` to map VRAM pointers directly. In early iterations, frequent `HostToDevice` data copying was a major bottleneck. I resolved this by introducing **Pinned Memory** and a **Double Buffering** strategy, which allows for the overlapping of computation and data transfer. This optimization stabilized GPU utilization at over **95%**.
 
   * **RAII Resource Management**:

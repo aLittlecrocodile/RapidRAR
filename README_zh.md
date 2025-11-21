@@ -24,45 +24,7 @@ RapidRAR 是一个基于 **Producer-Consumer 模型** 的高性能 RAR 密码恢
 * **Host (CPU)**: 维护一个线程池 (`ThreadPoolExecutor`)，负责读取字典/生成掩码空间，并以 Batch 为单位分发任务。
 * **Device (GPU)**: 自定义 CUDA Kernel (`.cu`) 直接操作显存，采用 **Zero-Copy** 思想减少 PCIe 传输开销。
 
-```mermaid
-flowchart TB
-    classDef plain fill:#fff,stroke:#333,stroke-width:1px;
-    classDef db fill:#eee,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5;
-    
-    start((Start)) --> input[CLI / Arguments]
-    input --> init[GPU Manager Init]
-    
-    subgraph Host [Host Context - Python]
-        direction TB
-        init --> batcher[Batch Generator]
-        batcher -->|1. Task Queue| thread[ThreadPool]
-    end
-
-    thread == "PCIe Bus (H2D)" ==> vram_in
-    
-    subgraph Device [Device Context - CUDA]
-        direction TB
-        vram_in[(VRAM Input)] --> kernel["CUDA Kernel (Parallel Hash)"]
-        kernel --> vram_out[(Result Bitmap)]
-    end
-    
-    vram_out == "PCIe Bus (D2H)" ==> filter
-    
-    subgraph Verify [Validation]
-        direction TB
-        filter{Candidate?}
-        check["UnRAR / CPU Verify"]
-    end
-    
-    filter -- Yes --> check
-    filter -- No --> batcher
-    
-    check -- Pass --> found((Password Found))
-    check -.->|False Positive| batcher
-
-    class input,init,batcher,thread,kernel,check,filter plain;
-    class vram_in,vram_out db;
-```
+![Architecture Diagram](assets/architecture.svg)
 
 ## 💻 Implementation Details
 
