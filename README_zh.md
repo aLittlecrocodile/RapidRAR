@@ -25,7 +25,7 @@ RapidRAR 是一个基于 **Producer-Consumer 模型** 的高性能 RAR 密码恢
 * **Device (GPU)**: 自定义 CUDA Kernel (`.cu`) 直接操作显存，采用 **Zero-Copy** 思想减少 PCIe 传输开销。
 
 ```mermaid
-flowchart LR
+flowchart TB
     classDef plain fill:#fff,stroke:#333,stroke-width:1px;
     classDef db fill:#eee,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5;
     

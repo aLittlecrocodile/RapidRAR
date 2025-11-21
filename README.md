@@ -29,7 +29,7 @@ The system implements a Host-Device co-design pattern:
 * **Device (GPU)**: Custom CUDA Kernels (`.cu`) operate directly on VRAM, utilizing **Zero-Copy** mechanisms to minimize PCIe transfer overhead.
 
 ```mermaid
-flowchart LR
+flowchart TB
     classDef plain fill:#fff,stroke:#333,stroke-width:1px;
     classDef db fill:#eee,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5;
     
