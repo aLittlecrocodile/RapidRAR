@@ -25,62 +25,52 @@ RapidRAR 是一个基于 **Producer-Consumer 模型** 的高性能 RAR 密码恢
 * **Device (GPU)**: 自定义 CUDA Kernel (`.cu`) 直接操作显存，采用 **Zero-Copy** 思想减少 PCIe 传输开销。
 
 ```mermaid
-graph TD
-    %% 定义样式
-    classDef cpu fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
-    classDef gpu fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;
-    classDef store fill:#fff9c4,stroke:#fbc02d,stroke-width:2px;
-
-    subgraph CPU_Host [🖥️ CPU 主机端 (Host)]
-        Start((启动)) --> ArgParse[参数解析 & 环境检测]
-        ArgParse --> GPU_Init[GPUManager: 初始化设备 & 上下文]
-        GPU_Init --> Attack_Select{选择攻击模式?}
-        
-        Attack_Select -- 掩码/暴力 --> Batch_Gen[任务分发: 计算每个GPU的搜索空间]
-        Attack_Select -- 字典 --> Dict_Load[读取字典 & 分块]
-        
-        Batch_Gen --> ThreadPool[多线程池: 为每个GPU分配 Worker]
-        Dict_Load --> ThreadPool
-        
-        subgraph Worker_Thread [工作线程]
-            Mem_Alloc[分配显存 & 准备数据]
-            Data_Copy_H2D[数据拷贝: Host -> Device]
-            Kernel_Launch[启动 CUDA Kernel]
-            Data_Copy_D2H[结果拷贝: Device -> Host]
-            
-            Mem_Alloc -.-> Data_Copy_H2D
-            Data_Copy_H2D -.-> Kernel_Launch
-        end
-        
-        ThreadPool --> Worker_Thread
-        
-        Data_Copy_D2H --> Result_Filter{GPU 返回可能是密码?}
-        Result_Filter -- Yes --> CPU_Verify[CPU 最终验证 (UnRAR / rarfile)]
-        Result_Filter -- No --> Checkpoint[更新 Checkpoint]
-        
-        CPU_Verify -- Pass --> Success((✅ 找到密码))
-        CPU_Verify -- Fail --> Checkpoint
-        Checkpoint --> Next_Batch[下一批次]
-        Next_Batch --> ThreadPool
+flowchart LR
+    %% 整体横向布局，像一条流水线
+    
+    %% 定义一些简单的样式，不要太花哨
+    classDef plain fill:#fff,stroke:#333,stroke-width:1px;
+    classDef db fill:#eee,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5;
+    
+    start((Start)) --> input[CLI / Arguments]
+    input --> init[GPU Manager Init]
+    
+    %% Python 控制层 - 作为一个整体
+    subgraph Host [🐍 Host Context (Python)]
+        direction TB
+        init --> batcher[Batch Generator]
+        batcher -->|1. Task Queue| thread[ThreadPool]
     end
 
-    subgraph GPU_Device [⚡ GPU 设备端 (Device)]
-        Kernel_Exec[CUDA Kernel 执行]
-        
-        subgraph Parallel_Compute [大规模并行计算]
-            Thread1[Thread: 生成密码串]
-            Thread2[Thread: 计算 Hash/校验]
-            Thread3[Thread: 比对 RAR Header]
-        end
-        
-        Kernel_Launch -.-> Kernel_Exec
-        Kernel_Exec --> Parallel_Compute
-        Parallel_Compute --> Result_Bitmap[生成结果位图]
-        Result_Bitmap -.-> Data_Copy_D2H
+    %% 数据传输 - 重点标出 PCIe
+    thread == "PCIe Bus (H2D)" ==> vram_in
+    
+    %% GPU 计算层
+    subgraph Device [⚡ Device Context (CUDA)]
+        direction TB
+        vram_in[(VRAM Input)] --> kernel[CUDA Kernel\n(Parallel Hash)]
+        kernel --> vram_out[(Result Bitmap)]
     end
+    
+    %% 结果回传
+    vram_out == "PCIe Bus (D2H)" ==> filter
+    
+    %% 验证层
+    subgraph Verify [Validation]
+        direction TB
+        filter{Candidate?}
+        check[UnRAR / CPU Verify]
+    end
+    
+    filter -- Yes --> check
+    filter -- No --> batcher
+    
+    check -- Pass --> found((✅ Password Found))
+    check -.->|False Positive| batcher
 
-    class Start,ArgParse,GPU_Init,Attack_Select,Batch_Gen,Dict_Load,ThreadPool,Worker_Thread,Result_Filter,CPU_Verify,Checkpoint,Next_Batch cpu;
-    class Kernel_Exec,Parallel_Compute,Thread1,Thread2,Thread3,Result_Bitmap,Mem_Alloc,Data_Copy_H2D,Data_Copy_D2H gpu;
+    %% 应用样式
+    class input,init,batcher,thread,kernel,check,filter plain;
+    class vram_in,vram_out db;
 ```
 
 ## 💻 Implementation Details

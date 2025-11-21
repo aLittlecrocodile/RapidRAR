@@ -29,61 +29,52 @@ The system implements a Host-Device co-design pattern:
 * **Device (GPU)**: Custom CUDA Kernels (`.cu`) operate directly on VRAM, utilizing **Zero-Copy** mechanisms to minimize PCIe transfer overhead.
 
 ```mermaid
-graph TD
-    %% Styles
-    classDef cpu fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
-    classDef gpu fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;
-
-    subgraph CPU_Host [🖥️ CPU Host]
-        Start((Start)) --> ArgParse[Arg Parse & Env Check]
-        ArgParse --> GPU_Init[GPUManager: Init Context]
-        GPU_Init --> Attack_Select{Mode Selection}
-        
-        Attack_Select -- Mask/Brute-force --> Batch_Gen[Task Dispatch: Calculate Search Space]
-        Attack_Select -- Dictionary --> Dict_Load[Load Dict & Chunking]
-        
-        Batch_Gen --> ThreadPool[ThreadPool: Assign Workers]
-        Dict_Load --> ThreadPool
-        
-        subgraph Worker_Thread [Worker Thread]
-            Mem_Alloc[Alloc VRAM]
-            Data_Copy_H2D[Copy: Host -> Device]
-            Kernel_Launch[Launch CUDA Kernel]
-            Data_Copy_D2H[Copy: Device -> Host]
-            
-            Mem_Alloc -.-> Data_Copy_H2D
-            Data_Copy_H2D -.-> Kernel_Launch
-        end
-        
-        ThreadPool --> Worker_Thread
-        
-        Data_Copy_D2H --> Result_Filter{Candidate Found?}
-        Result_Filter -- Yes --> CPU_Verify[CPU Final Verify (UnRAR)]
-        Result_Filter -- No --> Checkpoint[Update Checkpoint]
-        
-        CPU_Verify -- Pass --> Success((✅ Success))
-        CPU_Verify -- Fail --> Checkpoint
-        Checkpoint --> Next_Batch[Next Batch]
-        Next_Batch --> ThreadPool
+flowchart LR
+    %% 整体横向布局，像一条流水线
+    
+    %% 定义一些简单的样式，不要太花哨
+    classDef plain fill:#fff,stroke:#333,stroke-width:1px;
+    classDef db fill:#eee,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5;
+    
+    start((Start)) --> input[CLI / Arguments]
+    input --> init[GPU Manager Init]
+    
+    %% Python 控制层 - 作为一个整体
+    subgraph Host [🐍 Host Context (Python)]
+        direction TB
+        init --> batcher[Batch Generator]
+        batcher -->|1. Task Queue| thread[ThreadPool]
     end
 
-    subgraph GPU_Device [⚡ GPU Device]
-        Kernel_Exec[Execute CUDA Kernel]
-        
-        subgraph Parallel_Compute [Massive Parallelism]
-            Thread1[Thread: Gen Password]
-            Thread2[Thread: Calc Hash]
-            Thread3[Thread: Verify Header]
-        end
-        
-        Kernel_Launch -.-> Kernel_Exec
-        Kernel_Exec --> Parallel_Compute
-        Parallel_Compute --> Result_Bitmap[Result Bitmap]
-        Result_Bitmap -.-> Data_Copy_D2H
+    %% 数据传输 - 重点标出 PCIe
+    thread == "PCIe Bus (H2D)" ==> vram_in
+    
+    %% GPU 计算层
+    subgraph Device [⚡ Device Context (CUDA)]
+        direction TB
+        vram_in[(VRAM Input)] --> kernel[CUDA Kernel\n(Parallel Hash)]
+        kernel --> vram_out[(Result Bitmap)]
     end
+    
+    %% 结果回传
+    vram_out == "PCIe Bus (D2H)" ==> filter
+    
+    %% 验证层
+    subgraph Verify [Validation]
+        direction TB
+        filter{Candidate?}
+        check[UnRAR / CPU Verify]
+    end
+    
+    filter -- Yes --> check
+    filter -- No --> batcher
+    
+    check -- Pass --> found((✅ Password Found))
+    check -.->|False Positive| batcher
 
-    class Start,ArgParse,GPU_Init,Attack_Select,Batch_Gen,Dict_Load,ThreadPool,Worker_Thread,Result_Filter,CPU_Verify,Checkpoint,Next_Batch cpu;
-    class Kernel_Exec,Parallel_Compute,Thread1,Thread2,Thread3,Result_Bitmap,Mem_Alloc,Data_Copy_H2D,Data_Copy_D2H gpu;
+    %% 应用样式
+    class input,init,batcher,thread,kernel,check,filter plain;
+    class vram_in,vram_out db;
 ```
 
 ## 💻 Implementation Details
