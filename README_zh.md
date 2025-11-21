@@ -24,7 +24,45 @@ RapidRAR 是一个基于 **Producer-Consumer 模型** 的高性能 RAR 密码恢
 * **Host (CPU)**: 维护一个线程池 (`ThreadPoolExecutor`)，负责读取字典/生成掩码空间，并以 Batch 为单位分发任务。
 * **Device (GPU)**: 自定义 CUDA Kernel (`.cu`) 直接操作显存，采用 **Zero-Copy** 思想减少 PCIe 传输开销。
 
-![Architecture Diagram](https://mermaid.ink/img/Zmxvd2NoYXJ0IExSCiAgICBjbGFzc0RlZiBwbGFpbiBmaWxsOiNmZmYsc3Ryb2tlOiMzMzMsc3Ryb2tlLXdpZHRoOjFweDsKICAgIGNsYXNzRGVmIGRiIGZpbGw6I2VlZSxzdHJva2U6IzMzMyxzdHJva2Utd2lkdGg6MXB4LHN0cm9rZS1kYXNoYXJyYXk6IDUgNTsKICAgIAogICAgc3RhcnQoKFN0YXJ0KSkgLS0-IGlucHV0W0NMSSAvIEFyZ3VtZW50c10KICAgIGlucHV0IC0tPiBpbml0W0dQVSBNYW5hZ2VyIEluaXRdCiAgICAKICAgIHN1YmdyYXBoIEhvc3QgW--_ve-_vSBIb3N0IENvbnRleHQgKFB5dGhvbildCiAgICAgICAgZGlyZWN0aW9uIFRCCiAgICAgICAgaW5pdCAtLT4gYmF0Y2hlcltCYXRjaCBHZW5lcmF0b3JdCiAgICAgICAgYmF0Y2hlciAtLT58MS4gVGFzayBRdWV1ZXwgdGhyZWFkW1RocmVhZFBvb2xdCiAgICBlbmQKCiAgICB0aHJlYWQgPT0gIlBDSWUgQnVzIChIMkQpIiA9PT4gdnJhbV9pbgogICAgCiAgICBzdWJncmFwaCBEZXZpY2UgW-KaoSBEZXZpY2UgQ29udGV4dCAoQ1VEQSldCiAgICAgICAgZGlyZWN0aW9uIFRCCiAgICAgICAgdnJhbV9pblsoVlJBTSBJbnB1dCldIC0tPiBrZXJuZWxbIkNVREEgS2VybmVsPGJyPihQYXJhbGxlbCBIYXNoKSJdCiAgICAgICAga2VybmVsIC0tPiB2cmFtX291dFsoUmVzdWx0IEJpdG1hcCldCiAgICBlbmQKICAgIAogICAgdnJhbV9vdXQgPT0gIlBDSWUgQnVzIChEMkgpIiA9PT4gZmlsdGVyCiAgICAKICAgIHN1YmdyYXBoIFZlcmlmeSBbVmFsaWRhdGlvbl0KICAgICAgICBkaXJlY3Rpb24gVEIKICAgICAgICBmaWx0ZXJ7Q2FuZGlkYXRlP30KICAgICAgICBjaGVja1tVblJBUiAvIENQVSBWZXJpZnldCiAgICBlbmQKICAgIAogICAgZmlsdGVyIC0tIFllcyAtLT4gY2hlY2sKICAgIGZpbHRlciAtLSBObyAtLT4gYmF0Y2hlcgogICAgCiAgICBjaGVjayAtLSBQYXNzIC0tPiBmb3VuZCgo4pyFIFBhc3N3b3JkIEZvdW5kKSkKICAgIGNoZWNrIC0uLT58RmFsc2UgUG9zaXRpdmV8IGJhdGNoZXIKCiAgICBjbGFzcyBpbnB1dCxpbml0LGJhdGNoZXIsdGhyZWFkLGtlcm5lbCxjaGVjayxmaWx0ZXIgcGxhaW47CiAgICBjbGFzcyB2cmFtX2luLHZyYW1fb3V0IGRiOw==)
+```mermaid
+flowchart LR
+    classDef plain fill:#fff,stroke:#333,stroke-width:1px;
+    classDef db fill:#eee,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5;
+    
+    start((Start)) --> input[CLI / Arguments]
+    input --> init[GPU Manager Init]
+    
+    subgraph Host [Host Context - Python]
+        direction TB
+        init --> batcher[Batch Generator]
+        batcher -->|1. Task Queue| thread[ThreadPool]
+    end
+
+    thread == "PCIe Bus (H2D)" ==> vram_in
+    
+    subgraph Device [Device Context - CUDA]
+        direction TB
+        vram_in[(VRAM Input)] --> kernel["CUDA Kernel (Parallel Hash)"]
+        kernel --> vram_out[(Result Bitmap)]
+    end
+    
+    vram_out == "PCIe Bus (D2H)" ==> filter
+    
+    subgraph Verify [Validation]
+        direction TB
+        filter{Candidate?}
+        check["UnRAR / CPU Verify"]
+    end
+    
+    filter -- Yes --> check
+    filter -- No --> batcher
+    
+    check -- Pass --> found((Password Found))
+    check -.->|False Positive| batcher
+
+    class input,init,batcher,thread,kernel,check,filter plain;
+    class vram_in,vram_out db;
+```
 
 ## 💻 Implementation Details
 
