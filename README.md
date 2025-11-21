@@ -27,7 +27,7 @@ The system implements a Host-Device co-design pattern:
 * **Host (CPU)**: Maintains a `ThreadPoolExecutor` to manage dictionary reading and mask space generation. Tasks are dispatched to the device in dynamic Batches.
 * **Device (GPU)**: Custom CUDA Kernels (`.cu`) operate directly on VRAM, utilizing **Zero-Copy** mechanisms to minimize PCIe transfer overhead.
 
-![Architecture Diagram](assets/architecture.svg)
+![Architecture Diagram](assets/architecture_v2.svg)
 
 ## 💻 Implementation Details
 
