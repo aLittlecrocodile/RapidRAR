@@ -9,6 +9,12 @@
 
 [**English**](README.md) | [**中文**](README_zh.md)
 
+---
+
+## ⚠️ 实验性项目
+
+> **注意：** 本项目目前主要用于验证 **Python + CUDA 的异构调度架构**。核心的 AES-256 解密内核尚在移植中，当前版本使用**模拟负载**进行压力测试，**暂不支持实际密码破解**。请勿用于生产环境。
+
 ## 📝 Introduction
 
 RapidRAR 是一个基于 **Producer-Consumer 模型** 的高性能 RAR 密码恢复工具。

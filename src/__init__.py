@@ -7,7 +7,7 @@ ZipCracker包初始化文件
 
 import logging
 from pathlib import Path
-from .cuda_kernels import CUDA_KERNEL_CODE
+from .cuda_kernels import RAR_PASSWORD_CHECK_KERNEL
 from .cracker import RARCracker
 from .gpu_manager import GPUManager
 
@@ -33,4 +33,4 @@ def ensure_dirs():
 # 当导入包时运行
 ensure_dirs()
 
-__all__ = ['CUDA_KERNEL_CODE', 'RARCracker', 'GPUManager'] 
+__all__ = ['RAR_PASSWORD_CHECK_KERNEL', 'RARCracker', 'GPUManager'] 

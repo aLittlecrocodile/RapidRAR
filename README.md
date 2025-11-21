@@ -10,6 +10,12 @@
 
 [**English**](README.md) | [**中文**](README_zh.md)
 
+---
+
+## ⚠️ Work In Progress
+
+> **Note:** This project is currently a **Proof of Concept (PoC)** for heterogeneous scheduling architecture. The core AES-256 decryption kernel is still being ported. The current version uses **simulated workload** for stress testing and **does not support actual password cracking**. Please do not use in production environments.
+
 ## 📝 Introduction
 
 RapidRAR is a high-performance RAR password recovery tool designed around the **Producer-Consumer model**.
