@@ -24,54 +24,7 @@ RapidRAR 是一个基于 **Producer-Consumer 模型** 的高性能 RAR 密码恢
 * **Host (CPU)**: 维护一个线程池 (`ThreadPoolExecutor`)，负责读取字典/生成掩码空间，并以 Batch 为单位分发任务。
 * **Device (GPU)**: 自定义 CUDA Kernel (`.cu`) 直接操作显存，采用 **Zero-Copy** 思想减少 PCIe 传输开销。
 
-```mermaid
-flowchart LR
-    %% 整体横向布局，像一条流水线
-    
-    %% 定义一些简单的样式，不要太花哨
-    classDef plain fill:#fff,stroke:#333,stroke-width:1px;
-    classDef db fill:#eee,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5;
-    
-    start((Start)) --> input[CLI / Arguments]
-    input --> init[GPU Manager Init]
-    
-    %% Python 控制层 - 作为一个整体
-    subgraph Host [🐍 Host Context (Python)]
-        direction TB
-        init --> batcher[Batch Generator]
-        batcher -->|1. Task Queue| thread[ThreadPool]
-    end
-
-    %% 数据传输 - 重点标出 PCIe
-    thread == "PCIe Bus (H2D)" ==> vram_in
-    
-    %% GPU 计算层
-    subgraph Device [⚡ Device Context (CUDA)]
-        direction TB
-        vram_in[(VRAM Input)] --> kernel[CUDA Kernel\n(Parallel Hash)]
-        kernel --> vram_out[(Result Bitmap)]
-    end
-    
-    %% 结果回传
-    vram_out == "PCIe Bus (D2H)" ==> filter
-    
-    %% 验证层
-    subgraph Verify [Validation]
-        direction TB
-        filter{Candidate?}
-        check[UnRAR / CPU Verify]
-    end
-    
-    filter -- Yes --> check
-    filter -- No --> batcher
-    
-    check -- Pass --> found((✅ Password Found))
-    check -.->|False Positive| batcher
-
-    %% 应用样式
-    class input,init,batcher,thread,kernel,check,filter plain;
-    class vram_in,vram_out db;
-```
+![Architecture Diagram](https://mermaid.ink/img/Zmxvd2NoYXJ0IExSCiAgICAlJSDmlbTkvZPmqKrlkJHluIPlsYDvvIzlg4_kuIDmnaHmtYHmsLTnur8KICAgIAogICAgJSUg5a6a5LmJ5LiA5Lqb566A5Y2V55qE5qC35byP77yM5LiN6KaB5aSq6Iqx5ZOoCiAgICBjbGFzc0RlZiBwbGFpbiBmaWxsOiNmZmYsc3Ryb2tlOiMzMzMsc3Ryb2tlLXdpZHRoOjFweDsKICAgIGNsYXNzRGVmIGRiIGZpbGw6I2VlZSxzdHJva2U6IzMzMyxzdHJva2Utd2lkdGg6MXB4LHN0cm9rZS1kYXNoYXJyYXk6IDUgNTsKICAgIAogICAgc3RhcnQoKFN0YXJ0KSkgLS0-IGlucHV0W0NMSSAvIEFyZ3VtZW50c10KICAgIGlucHV0IC0tPiBpbml0W0dQVSBNYW5hZ2VyIEluaXRdCiAgICAKICAgICUlIFB5dGhvbiDmjqfliLblsYIgLSDkvZzkuLrkuIDkuKrmlbTkvZMKICAgIHN1YmdyYXBoIEhvc3QgW_CfkI0gSG9zdCBDb250ZXh0IChQeXRob24pXQogICAgICAgIGRpcmVjdGlvbiBUQgogICAgICAgIGluaXQgLS0-IGJhdGNoZXJbQmF0Y2ggR2VuZXJhdG9yXQogICAgICAgIGJhdGNoZXIgLS0-fDEuIFRhc2sgUXVldWV8IHRocmVhZFtUaHJlYWRQb29sXQogICAgZW5kCgogICAgJSUg5pWw5o2u5Lyg6L6TIC0g6YeN54K55qCH5Ye6IFBDSWUKICAgIHRocmVhZCA9PSAiUENJZSBCdXMgKEgyRCkiID09PiB2cmFtX2luCiAgICAKICAgICUlIEdQVSDorqHnrpflsYIKICAgIHN1YmdyYXBoIERldmljZSBb4pqhIERldmljZSBDb250ZXh0IChDVURBKV0KICAgICAgICBkaXJlY3Rpb24gVEIKICAgICAgICB2cmFtX2luWyhWUkFNIElucHV0KV0gLS0-IGtlcm5lbFtDVURBIEtlcm5lbAooUGFyYWxsZWwgSGFzaCldCiAgICAgICAga2VybmVsIC0tPiB2cmFtX291dFsoUmVzdWx0IEJpdG1hcCldCiAgICBlbmQKICAgIAogICAgJSUg57uT5p6c5Zue5LygCiAgICB2cmFtX291dCA9PSAiUENJZSBCdXMgKEQySCkiID09PiBmaWx0ZXIKICAgIAogICAgJSUg6aqM6K-B5bGCCiAgICBzdWJncmFwaCBWZXJpZnkgW1ZhbGlkYXRpb25dCiAgICAgICAgZGlyZWN0aW9uIFRCCiAgICAgICAgZmlsdGVye0NhbmRpZGF0ZT99CiAgICAgICAgY2hlY2tbVW5SQVIgLyBDUFUgVmVyaWZ5XQogICAgZW5kCiAgICAKICAgIGZpbHRlciAtLSBZZXMgLS0-IGNoZWNrCiAgICBmaWx0ZXIgLS0gTm8gLS0-IGJhdGNoZXIKICAgIAogICAgY2hlY2sgLS0gUGFzcyAtLT4gZm91bmQoKOKchSBQYXNzd29yZCBGb3VuZCkpCiAgICBjaGVjayAtLi0-fEZhbHNlIFBvc2l0aXZlfCBiYXRjaGVyCgogICAgJSUg5bqU55So5qC35byPCiAgICBjbGFzcyBpbnB1dCxpbml0LGJhdGNoZXIsdGhyZWFkLGtlcm5lbCxjaGVjayxmaWx0ZXIgcGxhaW47CiAgICBjbGFzcyB2cmFtX2luLHZyYW1fb3V0IGRiOw==)
 
 ## 💻 Implementation Details
 
