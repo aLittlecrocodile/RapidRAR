@@ -1,0 +1,45 @@
+// RapidRAR Architecture
+digraph {
+	compound=true nodesep=0.6 rankdir=LR ranksep=0.8 splines=ortho
+	node [fontname=Helvetica fontsize=14 margin=0.25 shape=rect style=filled]
+	edge [fontname=Helvetica fontsize=11]
+	start [label="Start / CLI" fillcolor="#333333" fontcolor=white shape=circle style=filled width=1.0]
+	subgraph cluster_0 {
+		color="#F5F7FA" fontcolor="#555555" fontsize=16 label="🐍 Host Context (Control Plane)" style=filled
+		init [label="GPU Manager
+(RAII Context)" color="#333333" fillcolor="#FFFFFF"]
+		batcher [label="Batch Generator
+(Dynamic Batching)" color="#333333" fillcolor="#FFFFFF"]
+		pool [label="ThreadPool
+(Task Dispatch)" color="#333333" fillcolor="#FFFFFF"]
+		init -> batcher [style=invis]
+		batcher -> pool [label=Tasks]
+	}
+	subgraph cluster_1 {
+		color="#E8F5E9" fontcolor="#2E7D32" fontsize=16 label="⚡ Device Context (Data Plane)" style=filled
+		vram_in [label="Pinned Memory
+(Input Buffer)" color="#2E7D32" fillcolor="#FFFFFF" shape=cylinder]
+		kernel [label="CUDA Kernel
+(Parallel Hash)" color="#2E7D32" fillcolor="#FFFFFF" shape=component]
+		vram_out [label="Result Bitmap
+(Output Buffer)" color="#2E7D32" fillcolor="#FFFFFF" shape=cylinder]
+		vram_in -> kernel
+		kernel -> vram_out
+	}
+	subgraph cluster_2 {
+		color="#FFB74D" fontcolor="#F57C00" fontsize=16 label="🛡️ Validation Layer" style=dashed
+		filter [label="Candidate?" color="#F57C00" fillcolor="#FFFFFF" shape=diamond style=filled]
+		check [label="UnRAR Verify
+(CPU Check)" color="#F57C00" fillcolor="#FFFFFF"]
+		success [label="Success
+Password Found" fillcolor="#2E7D32" fontcolor=white shape=doublecircle]
+		filter -> check [label=" Yes"]
+		check -> success [label=" Pass"]
+	}
+	start -> init
+	pool -> vram_in [label=" PCIe Bus (H2D)" color="#333333" penwidth=3.0]
+	vram_out -> filter [label=" PCIe Bus (D2H)" color="#333333" penwidth=3.0]
+	check -> batcher [label=" False Positive
+(Retry)" color="#d32f2f" constraint=false fontcolor="#d32f2f" style=dotted]
+	filter -> batcher [label=" No" constraint=false style=dotted]
+}

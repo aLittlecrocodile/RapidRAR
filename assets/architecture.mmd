@@ -1,0 +1,46 @@
+flowchart LR
+    %% 整体横向布局，像一条流水线
+    
+    %% 定义一些简单的样式，不要太花哨
+    classDef plain fill:#fff,stroke:#333,stroke-width:1px;
+    classDef db fill:#eee,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5;
+    
+    start((Start)) --> input[CLI / Arguments]
+    input --> init[GPU Manager Init]
+    
+    %% Python 控制层 - 作为一个整体
+    subgraph Host [🐍 Host Context (Python)]
+        direction TB
+        init --> batcher[Batch Generator]
+        batcher -->|1. Task Queue| thread[ThreadPool]
+    end
+
+    %% 数据传输 - 重点标出 PCIe
+    thread == "PCIe Bus (H2D)" ==> vram_in
+    
+    %% GPU 计算层
+    subgraph Device [⚡ Device Context (CUDA)]
+        direction TB
+        vram_in[(VRAM Input)] --> kernel[CUDA Kernel\n(Parallel Hash)]
+        kernel --> vram_out[(Result Bitmap)]
+    end
+    
+    %% 结果回传
+    vram_out == "PCIe Bus (D2H)" ==> filter
+    
+    %% 验证层
+    subgraph Verify [Validation]
+        direction TB
+        filter{Candidate?}
+        check[UnRAR / CPU Verify]
+    end
+    
+    filter -- Yes --> check
+    filter -- No --> batcher
+    
+    check -- Pass --> found((✅ Password Found))
+    check -.->|False Positive| batcher
+
+    %% 应用样式
+    class input,init,batcher,thread,kernel,check,filter plain;
+    class vram_in,vram_out db;
