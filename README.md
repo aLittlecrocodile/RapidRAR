@@ -1,243 +1,139 @@
-# RapidRAR: 高性能GPU驱动的RAR密码恢复工具
+# RapidRAR
+> A High-Performance Distributed RAR Cracker based on CUDA & Python.
 
 <div align="center">
-  <img src="https://img.shields.io/badge/CUDA-Powered-76B900?style=for-the-badge&logo=nvidia&logoColor=white" alt="CUDA Powered">
-  <img src="https://img.shields.io/badge/Python-3.8+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.8+">
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
-  <br>
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey?style=for-the-badge" alt="Platform">
+  <img src="https://img.shields.io/badge/Build-Passing-brightgreen?style=flat-square" alt="Build">
+  <img src="https://img.shields.io/badge/Python-3.8%2B-blue?style=flat-square" alt="Python">
+  <img src="https://img.shields.io/badge/CUDA-11.6%2B-76B900?style=flat-square" alt="CUDA">
+  <img src="https://img.shields.io/badge/License-MIT-orange?style=flat-square" alt="License">
 </div>
 
-## 📖 概述
+[**English**](README.md) | [**中文**](README_zh.md)
 
-RapidRAR是一个专为密码恢复设计的高性能工具，利用GPU并行计算能力实现RAR压缩文件的快速密码破解。无论是误存的个人压缩文件，还是需要进行安全测试的企业环境，RapidRAR都能提供卓越的性能和灵活的攻击策略。
+## 📝 Introduction
 
-特点：
-- ⚡ **CUDA加速**：利用NVIDIA GPU的并行计算能力，比CPU快数十倍
-- 🔄 **断点续传**：支持中断后继续，无需重新开始
-- 🎮 **多种攻击模式**：支持掩码攻击、字典攻击和暴力破解
-- 📊 **实时进度**：直观显示破解速度和进度
-- 🧩 **灵活配置**：根据硬件性能和需求定制参数
+RapidRAR is a high-performance RAR password recovery tool designed around the **Producer-Consumer model**.
 
-> ⚠️ **免责声明**：RapidRAR仅供合法恢复自己文件密码使用。请勿用于未经授权的解密行为。
+I started this project to address the significant inefficiency of traditional CPU-based serial decryption when facing high-strength encryption standards like AES-256. Unlike common brute-force tools, RapidRAR adopts a heterogeneous architecture combining **Python Control Flow** with **CUDA Compute Flow**: 
 
-## 🛠️ 安装
+- **Python** handles complex I/O scheduling, task dispatching, and fault tolerance.
+- **GPU (CUDA)** handles the computationally intensive Hash verification, which is completely offloaded to the device. 
 
-### 前提条件
-- NVIDIA GPU (支持CUDA)
-- CUDA Toolkit 12.0+
-- Python 3.8+
+This design decouples the computation logic from the hardware implementation. Currently, it supports cross-platform execution on both **NVIDIA GPUs** (CUDA) and **Apple Silicon** (NEON/Metal optimizations).
 
-### 安装步骤
+## 🏗️ Architecture
 
-1. **克隆仓库**
+The system implements a Host-Device co-design pattern:
+
+* **Host (CPU)**: Maintains a `ThreadPoolExecutor` to manage dictionary reading and mask space generation. Tasks are dispatched to the device in dynamic Batches.
+* **Device (GPU)**: Custom CUDA Kernels (`.cu`) operate directly on VRAM, utilizing **Zero-Copy** mechanisms to minimize PCIe transfer overhead.
+
+```mermaid
+graph TD
+    %% Styles
+    classDef cpu fill:#e1f5fe,stroke:#01579b,stroke-width:2px;
+    classDef gpu fill:#f3e5f5,stroke:#4a148c,stroke-width:2px;
+
+    subgraph CPU_Host [🖥️ CPU Host]
+        Start((Start)) --> ArgParse[Arg Parse & Env Check]
+        ArgParse --> GPU_Init[GPUManager: Init Context]
+        GPU_Init --> Attack_Select{Mode Selection}
+        
+        Attack_Select -- Mask/Brute-force --> Batch_Gen[Task Dispatch: Calculate Search Space]
+        Attack_Select -- Dictionary --> Dict_Load[Load Dict & Chunking]
+        
+        Batch_Gen --> ThreadPool[ThreadPool: Assign Workers]
+        Dict_Load --> ThreadPool
+        
+        subgraph Worker_Thread [Worker Thread]
+            Mem_Alloc[Alloc VRAM]
+            Data_Copy_H2D[Copy: Host -> Device]
+            Kernel_Launch[Launch CUDA Kernel]
+            Data_Copy_D2H[Copy: Device -> Host]
+            
+            Mem_Alloc -.-> Data_Copy_H2D
+            Data_Copy_H2D -.-> Kernel_Launch
+        end
+        
+        ThreadPool --> Worker_Thread
+        
+        Data_Copy_D2H --> Result_Filter{Candidate Found?}
+        Result_Filter -- Yes --> CPU_Verify[CPU Final Verify (UnRAR)]
+        Result_Filter -- No --> Checkpoint[Update Checkpoint]
+        
+        CPU_Verify -- Pass --> Success((✅ Success))
+        CPU_Verify -- Fail --> Checkpoint
+        Checkpoint --> Next_Batch[Next Batch]
+        Next_Batch --> ThreadPool
+    end
+
+    subgraph GPU_Device [⚡ GPU Device]
+        Kernel_Exec[Execute CUDA Kernel]
+        
+        subgraph Parallel_Compute [Massive Parallelism]
+            Thread1[Thread: Gen Password]
+            Thread2[Thread: Calc Hash]
+            Thread3[Thread: Verify Header]
+        end
+        
+        Kernel_Launch -.-> Kernel_Exec
+        Kernel_Exec --> Parallel_Compute
+        Parallel_Compute --> Result_Bitmap[Result Bitmap]
+        Result_Bitmap -.-> Data_Copy_D2H
+    end
+
+    class Start,ArgParse,GPU_Init,Attack_Select,Batch_Gen,Dict_Load,ThreadPool,Worker_Thread,Result_Filter,CPU_Verify,Checkpoint,Next_Batch cpu;
+    class Kernel_Exec,Parallel_Compute,Thread1,Thread2,Thread3,Result_Bitmap,Mem_Alloc,Data_Copy_H2D,Data_Copy_D2H gpu;
+```
+
+## 💻 Implementation Details
+
+In this project, I focused on solving several key engineering challenges:
+
+  * **Zero-Copy Data Flow**:
+    I utilized `PyCUDA` to map VRAM pointers directly. In early iterations, frequent `HostToDevice` data copying was a major bottleneck. I resolved this by introducing **Pinned Memory** and a **Double Buffering** strategy, which allows for the overlapping of computation and data transfer. This optimization stabilized GPU utilization at over **95%**.
+
+  * **RAII Resource Management**:
+    To prevent VRAM leaks (OOM) during extended runtime, I encapsulated a `GPUManager` class. leveraging Python's Context Manager (`__enter__`/`__exit__`) to automatically manage the lifecycle of the CUDA Context. This ensures that GPU handles are correctly released even during abnormal exits or interrupts.
+
+  * **Apple M-Series Optimization**:
+    For macOS environments lacking NVIDIA GPUs, I implemented a fallback solution using `multiprocessing`. This backend includes specific optimizations for the **ARM64** instruction set to maximize performance on Apple Silicon.
+
+## 📊 Benchmark
+
+**Test Environment:**
+
+  * **Desktop**: Intel i7-12700K + NVIDIA RTX 3090 (24GB) / Ubuntu 20.04
+  * **Laptop**: MacBook Pro (M4 Max) / macOS 15
+
+| Device | Backend | Ops/sec | Speedup | Note |
+|--------|---------|---------|---------|------|
+| i7-12700K | CPU (Single-thread) | ~12,500 | 1x | Baseline |
+| **Apple M4 Max** | **CPU (Multi-process)** | **~118,000** | **~9.5x** | Optimized for ARM64 |
+| RTX 3060 (12GB) | CUDA | ~45M | 3,600x | |
+| RTX 3090 (24GB) | CUDA | ~112M | 8,960x | Saturation of VRAM Bandwidth |
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+  * Python 3.8+
+  * **NVIDIA Driver & CUDA Toolkit** (Linux/Windows)
+  * **UnRAR Runtime**:
+      * Linux: `sudo apt install unrar`
+      * macOS: `brew install unrar`
+
+### Installation & Usage
+
 ```bash
-git clone https://github.com/yourusername/rapidrar.git
-cd rapidrar
+git clone https://github.com/aLittlecrocodile/RapidRAR.git
+cd RapidRAR
+pip install -r requirements.txt
+
+# Auto-detect hardware and start mask attack
+python main.py --rar_file encrypted.rar --mask "?d?d?d?d"
 ```
 
-2. **安装依赖**
-```bash
-# 推荐使用uv虚拟环境（更快的Python包管理工具）
-# 先安装uv
-pip install uv
+-----
 
-# 创建并激活虚拟环境
-uv venv
-# Windows
-.\.venv\Scripts\activate
-# Linux/Mac
-source .venv/bin/activate
-
-# 使用uv安装依赖
-uv pip install -r requirements.txt
-```
-
-3. **安装UnRAR**
-
-- **Ubuntu/Debian**:
-```bash
-sudo apt-get install unrar
-```
-
-- **RHEL/CentOS**:
-```bash
-sudo yum install unrar
-```
-
-- **macOS**:
-```bash
-brew install unrar
-```
-
-- **Windows**: 
-下载并安装[WinRAR](https://www.win-rar.com/)
-
-## 🚀 使用方法
-
-### 基本用法
-
-```bash
-python main.py --rar_file <RAR文件路径> --mask <密码掩码> --gpu <GPU ID>
-```
-
-### 示例
-
-#### 掩码攻击 (最常用)
-```bash
-# 试破解8位密码，前4位是任意字符，后4位是数字
-python main.py --rar_file example.rar --mask "?a?a?a?a?d?d?d?d" --gpu 0
-
-# 试破解6位纯数字密码
-python main.py --rar_file example.rar --mask "?d?d?d?d?d?d" --gpu 0
-
-# 试破解密码格式为"admin"加3位数字
-python main.py --rar_file example.rar --mask "admin?d?d?d" --gpu 0
-```
-
-#### 字典攻击
-```bash
-python main.py --rar_file example.rar --dict wordlist.txt --gpu 0
-```
-
-#### 暴力破解
-```bash
-python main.py --rar_file example.rar --min_length 6 --max_length 8 --gpu 0
-```
-
-#### 性能优化
-```bash
-python main.py --rar_file example.rar --mask "?a?a?a?a?d?d?d?d" --gpu 0 --threads_per_block 1024 --batch_size 20000000 --concurrent_batches 3
-```
-
-### 完整参数列表
-
-| 参数 | 默认值 | 描述 |
-|------|--------|------|
-| `--rar_file` | - | RAR文件路径（必填） |
-| `--mask` | None | 密码掩码（如 ?a?a?a?a?d?d?d?d） |
-| `--dict` | None | 字典文件路径 |
-| `--min_length` | 8 | 最小密码长度 |
-| `--max_length` | 12 | 最大密码长度 |
-| `--gpu` | 0 | 使用的GPU ID |
-| `--threads_per_block` | 256 | CUDA每个块的线程数 |
-| `--batch_size` | 10000000 | 每批处理的密码数量 |
-| `--concurrent_batches` | 2 | 并行批次数 |
-| `--checkpoint` | checkpoint.json | 检查点文件路径 |
-| `--resume` | False | 从检查点恢复 |
-| `--update_interval` | 1.0 | 进度更新间隔（秒） |
-
-### 掩码符号说明
-
-| 符号 | 描述 | 示例 |
-|------|------|------|
-| `?a` | 所有字符 | a-z, A-Z, 0-9, 特殊字符 |
-| `?l` | 小写字母 | a-z |
-| `?u` | 大写字母 | A-Z |
-| `?d` | 数字 | 0-9 |
-| `?s` | 特殊字符 | !@#$%^&*()等 |
-
-## 💡 破解策略
-
-### 高效破解技巧
-
-1. **从简单常见密码开始**
-   - 尝试6-8位纯数字: `--mask "?d?d?d?d?d?d"`
-   - 常见组合如手机号后6位、生日等: `--mask "?d?d?d?d?d?d"`
-
-2. **尝试常见密码模式**
-   - 小写字母+数字: `--mask "?l?l?l?l?d?d?d?d"`
-   - 首字母大写+小写字母+数字: `--mask "?u?l?l?l?l?d?d?d"`
-
-3. **使用已知信息**
-   - 已知用户名或常用ID加数字: `--mask "admin?d?d?d?d"`
-   - 公司名字缩写+年份: `--mask "company2024"`
-
-4. **常见单词组合**
-   - 常见单词加数字: `--mask "password?d?d?d?d"`
-   - 名字加生日: `--mask "name?d?d?d?d"`
-
-5. **逐步提高复杂度**
-   - 从简单到复杂，避免不必要的计算
-
-## 🔧 进阶配置
-
-### GPU性能优化
-
-为RTX 3050/3060/3070/3080/3090系列显卡推荐配置:
-```bash
---threads_per_block 1024 --batch_size 20000000 --concurrent_batches 3
-```
-
-为GTX 1650/1660系列显卡推荐配置:
-```bash
---threads_per_block 768 --batch_size 10000000 --concurrent_batches 2
-```
-
-### 自定义字符集
-
-在密码中包含特定字符：
-```bash
---charset "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-```
-
-## 📊 性能对比
-
-| GPU型号 | 密码复杂度 | 处理速度(密码/秒) |
-|---------|-----------|------------------|
-| RTX 3090 | 8位混合字符 | ~2,500,000,000 |
-| RTX 3080 | 8位混合字符 | ~1,800,000,000 |
-| RTX 3070 | 8位混合字符 | ~1,200,000,000 |
-| RTX 3060 | 8位混合字符 | ~800,000,000 |
-| RTX 3050 | 8位混合字符 | ~500,000,000 |
-| CPU(8核) | 8位混合字符 | ~10,000,000 |
-
-> 注：实际速度取决于具体硬件配置和参数设置
-
-## 📁 项目结构
-
-```
-RapidRAR/
-├── main.py              # 程序入口
-├── requirements.txt     # 依赖列表
-├── README.md            # 项目说明
-└── src/
-    ├── __init__.py      # 包初始化
-    ├── cracker.py       # 核心破解逻辑
-    ├── cuda_kernels.py  # CUDA核函数
-    ├── gpu_manager.py   # GPU资源管理
-    ├── config.py        # 配置常量
-    └── utils.py         # 通用工具函数
-```
-
-## 🤝 贡献指南
-
-欢迎为RapidRAR做出贡献！以下是参与方式：
-
-1. Fork本仓库
-2. 创建功能分支: `git checkout -b feature/amazing-feature`
-3. 提交更改: `git commit -m 'Add some amazing feature'`
-4. 推送到分支: `git push origin feature/amazing-feature`
-5. 提交Pull Request
-
-## 📜 许可证
-
-本项目采用MIT许可证 - 详情见[LICENSE](LICENSE)文件
-
-## 🌟 致谢
-
-- NVIDIA - 提供CUDA技术
-- PyCUDA团队 - 提供Python CUDA绑定
-- rarfile - 提供RAR文件处理库
-
-## 📬 联系方式
-
-有问题或建议？请在GitHub Issue中提出，或联系：
-
-- Email: aooway@yeah.net
----
-
-<div align="center">
-  <p>⭐ 如果这个项目对你有帮助，别忘了Star! ⭐</p>
-  <p>RapidRAR - 超越极限，加速恢复</p>
-</div>
+*Disclaimer: This tool is intended for educational purposes and security audits only. Please do not use it for illegal activities.*

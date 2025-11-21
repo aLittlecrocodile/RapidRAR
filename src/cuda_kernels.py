@@ -15,25 +15,25 @@ __device__ bool check_password(const unsigned char* pwd, int len) {
 }
 
 __global__ void check_rar_password(
-    const int* indices,
-    const char* charset,
-    const int charset_len,
-    const int pwd_len,
-    const int batch_size,
-    bool* results
+    const char* passwords,
+    const int* password_lengths,
+    const int num_passwords,
+    const unsigned char* rar_header,
+    const int header_size,
+    int* results
 ) {
     const int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (tid >= batch_size) return;
+    if (tid >= num_passwords) return;
 
-    char pwd[32];
-    for (int i = 0; i < pwd_len; i++) {
-        const int idx = indices[tid * pwd_len + i];
-        if (idx >= charset_len) {
-            results[tid] = false;
-            return;
-        }
-        pwd[i] = charset[idx];
+    // Calculate password start position
+    int password_start = 0;
+    for (int i = 0; i < tid; i++) {
+        password_start += password_lengths[i];
     }
+    int pwd_len = password_lengths[tid];
+
+    // Get password
+    const char* pwd = &passwords[password_start];
     
     results[tid] = check_password((unsigned char*)pwd, pwd_len);
 }

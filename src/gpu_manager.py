@@ -9,8 +9,22 @@ import os
 import time
 import logging
 import numpy as np
-import pycuda.driver as cuda
-from pycuda.compiler import SourceModule
+try:
+    import pycuda.driver as cuda
+    from pycuda.compiler import SourceModule
+    HAS_PYCUDA = True
+except ImportError:
+    HAS_PYCUDA = False
+    # Mock cuda for type hinting or safe failure
+    class MockCuda:
+        class Error(Exception): pass
+        class device_attribute:
+            MULTIPROCESSOR_COUNT = 0
+            MAX_THREADS_PER_BLOCK = 0
+            CLOCK_RATE = 0
+            MAX_GRID_DIM_X = 0
+    cuda = MockCuda()
+    SourceModule = None
 import psutil
 
 from src.cuda_kernels import get_kernel_code
