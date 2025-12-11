@@ -35,5 +35,9 @@ COPY . .
 VOLUME /data
 
 # Default entrypoint
+# Expose API port (optional for CLI, but good for docs)
+EXPOSE 8000
+
+# Default entrypoint (CLI)
 ENTRYPOINT ["python", "main.py"]
 CMD ["--help"]
