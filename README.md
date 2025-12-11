@@ -86,3 +86,25 @@ python main.py --rar_file encrypted.rar --mask "?d?d?d?d"
 -----
 
 *Disclaimer: This tool is intended for educational purposes and security audits only. Please do not use it for illegal activities.*
+
+## 🐳 Docker Support
+
+RapidRAR provides multi-architecture Docker images (`linux/amd64`, `linux/arm64`) via GitHub Container Registry.
+
+### Pull Image
+```bash
+docker pull ghcr.io/alittlecrocodile/rapidrar:latest
+```
+
+### Run with Docker
+
+To crack a file, you need to mount it into the container:
+
+```bash
+# Assume your target file is in the current directory
+docker run -v $(pwd):/data ghcr.io/alittlecrocodile/rapidrar:latest \
+    --rar_file /data/encrypted.rar \
+    --mask "?d?d?d?d" \
+    --backend cpu \
+    --concurrent_batches 4
+```

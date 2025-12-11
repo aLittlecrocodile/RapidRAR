@@ -81,3 +81,25 @@ python main.py --rar_file encrypted.rar --mask "?d?d?d?d"
 -----
 
 *Disclaimer: This tool is for educational purposes and security audits only.*
+
+## 🐳 Docker 支持
+
+RapidRAR 通过 GitHub Container Registry 提供多架构 Docker 镜像 (`linux/amd64`, `linux/arm64`)。
+
+### 拉取镜像
+```bash
+docker pull ghcr.io/alittlecrocodile/rapidrar:latest
+```
+
+### 使用 Docker 运行
+
+你需要将待破解的文件挂载到容器中：
+
+```bash
+# 假设你的目标文件在当前目录
+docker run -v $(pwd):/data ghcr.io/alittlecrocodile/rapidrar:latest \
+    --rar_file /data/encrypted.rar \
+    --mask "?d?d?d?d" \
+    --backend cpu \
+    --concurrent_batches 4
+```
