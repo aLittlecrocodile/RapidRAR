@@ -3,27 +3,47 @@ import concurrent.futures
 import rarfile
 from .base import CrackerBackend
 
-def check_password_worker(rar_file, password):
+import zipfile
+
+def check_password_worker(file_path, password):
     """
     Worker function to check a single password.
     Must be at module level for multiprocessing pickling.
     """
-    try:
-        rf = rarfile.RarFile(rar_file)
-        # Try to open the first file in the archive
-        # This is usually faster than extractall
-        for f in rf.infolist():
-            if f.isdir():
-                continue
-            with rf.open(f, pwd=password) as _:
-                # If we can read one byte, the password is likely correct
-                _.read(1)
-                return password
-        return None
-    except (rarfile.PasswordRequired, rarfile.BadRarFile, rarfile.RarCRCError):
-        return None
-    except Exception:
-        return None
+    is_zip = file_path.lower().endswith('.zip')
+    
+    if is_zip:
+        try:
+            zf = zipfile.ZipFile(file_path)
+            # Try to open the first encrypted file
+            for zinfo in zf.infolist():
+                if zinfo.flag_bits & 0x1:
+                    with zf.open(zinfo, pwd=password.encode('utf-8')) as f:
+                        f.read(1)
+                    return password
+            return None
+        except (RuntimeError, zipfile.BadZipFile, zipfile.LargeZipFile):
+            # RuntimeError is raised by zipfile for bad password
+            return None
+        except Exception:
+            return None
+    else:
+        try:
+            rf = rarfile.RarFile(file_path)
+            # Try to open the first file in the archive
+            # This is usually faster than extractall
+            for f in rf.infolist():
+                if f.isdir():
+                    continue
+                with rf.open(f, pwd=password) as _:
+                    # If we can read one byte, the password is likely correct
+                    _.read(1)
+                    return password
+            return None
+        except (rarfile.PasswordRequired, rarfile.BadRarFile, rarfile.RarCRCError):
+            return None
+        except Exception:
+            return None
 
 class CPUBackend(CrackerBackend):
     """

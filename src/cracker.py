@@ -11,6 +11,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import rarfile
+import zipfile
 import numpy as np
 
 from src.config import (
@@ -88,23 +89,38 @@ class RARCracker:
         self.backend = get_backend(self.backend_name, gpu_id=self.gpu_id)
         self.backend.init()
         
-        # 验证RAR文件
-        self._validate_rar_file()
+        # 验证文件
+        self.is_zip = self.rar_file.lower().endswith('.zip')
+        self._validate_archive()
         
-        # 如果后端支持，设置RAR头部
-        if hasattr(self.backend, 'set_rar_header'):
+        # 如果后端支持，设置RAR头部 (仅RAR)
+        if hasattr(self.backend, 'set_rar_header') and not self.is_zip:
              with open(self.rar_file, 'rb') as f:
                 header = f.read(32) # Simplified
                 self.backend.set_rar_header(header)
 
-    def _validate_rar_file(self):
-        """验证RAR文件是否有效且有密码保护"""
-        try:
-            rf = rarfile.RarFile(self.rar_file)
-            if not rf.needs_password():
-                raise ValueError(f"RAR文件 '{self.rar_file}' 未加密，不需要密码")
-        except rarfile.Error as e:
-            raise ValueError(f"无效的RAR文件: {e}")
+    def _validate_archive(self):
+        """验证文件是否有效且有密码保护"""
+        if self.is_zip:
+             try:
+                zf = zipfile.ZipFile(self.rar_file)
+                # Check if any file is encrypted
+                is_encrypted = False
+                for zinfo in zf.infolist():
+                    if zinfo.flag_bits & 0x1:
+                        is_encrypted = True
+                        break
+                if not is_encrypted:
+                     raise ValueError(f"ZIP文件 '{self.rar_file}' 未加密，不需要密码")
+             except zipfile.BadZipFile as e:
+                raise ValueError(f"无效的ZIP文件: {e}")
+        else:
+            try:
+                rf = rarfile.RarFile(self.rar_file)
+                if not rf.needs_password():
+                    raise ValueError(f"RAR文件 '{self.rar_file}' 未加密，不需要密码")
+            except rarfile.Error as e:
+                raise ValueError(f"无效的RAR文件: {e}")
     
     def run(self, start_position=None):
         """运行密码破解过程"""
