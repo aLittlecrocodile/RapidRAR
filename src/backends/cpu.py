@@ -30,7 +30,7 @@ class CPUBackend(CrackerBackend):
     CPU-based backend using multiprocessing.
     """
     
-    def __init__(self, num_workers=None):
+    def __init__(self, num_workers=None, **kwargs):
         self.num_workers = num_workers or os.cpu_count()
         self.pool = None
         
