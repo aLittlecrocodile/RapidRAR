@@ -65,18 +65,45 @@ graph TD
 
 ## 🏁 How to Run
 
-### Local Docker
+### 1. Docker (Recommended)
+You can run RapidRAR directly as a CLI tool or as an API server.
+
+**Run as CLI Tool:**
 ```bash
-docker run -p 8000:8000 ghcr.io/alittlecrocodile/rapidrar:latest
+# Verify installation
+docker run --rm ghcr.io/alittlecrocodile/rapidrar:experiment-group-assignment rapidrar --help
+
+# Crack a file (mount volume)
+docker run --rm -v $(pwd):/data ghcr.io/alittlecrocodile/rapidrar:experiment-group-assignment rapidrar --rar_file /data/sample.rar
 ```
 
-### Kubernetes Deploy
+**Run as API Server:**
 ```bash
-kubectl apply -f k8s/namespace.yaml
+docker run -p 8000:8000 ghcr.io/alittlecrocodile/rapidrar:experiment-group-assignment
+```
+
+### 2. Local Installation
+Install locally to use the `rapidrar` command directly.
+
+```bash
+pip install -e .
+rapidrar --help
+```
+
+### 3. Kubernetes Deployment
+```bash
+# Deploy
 kubectl apply -f k8s/
+
+# Test deployment (Automatic)
+# Note: Ensure you have a sample.rar (or renamed zip) ready
+python test_k8s.py http://localhost:8080 sample.rar
 ```
 
-### Run Tests
+### 4. API Usage (manual)
 ```bash
-python test_k8s.py http://localhost:8000 ./sample.rar
+curl -X POST "http://localhost:8000/crack" \
+     -H "X-API-Key: dev-secret" \
+     -F "file=@sample.rar" \
+     -F "min_length=4"
 ```
