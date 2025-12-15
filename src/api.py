@@ -75,7 +75,7 @@ async def crack_archive(
             # For this interview task, synchronous execution is acceptable but we warn about timeout.
             
             cracker = RARCracker(
-                rar_path=file_path,
+                rar_file=file_path,
                 mask=mask,
                 min_length=min_length,
                 max_length=max_length,
