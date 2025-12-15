@@ -24,6 +24,10 @@ This project adds DevOps capabilities to the RapidRAR application, including:
 ### Task 3: PR Preview Design
 - **Design Doc**: See [DESIGN.md](DESIGN.md) for architectural decisions.
 - **Workflow**: `.github/workflows/pr-deploy.yml` implements the logic to spin up `rapidrar-pr-<ID>` namespaces.
+    
+### Task 5: Bonus Optimizations (Security & Ops)
+- **API Security**: Added `X-API-Key` authentication to `src/api.py`.
+- **Cost Control**: `k8s/cronjob-cleanup.yaml` deploys a daily CronJob to delete PR environments older than 24 hours.
 
 ## Assumptions & Limitations
 - **Unrar Dependency**: The `Dockerfile` attempts to install `unrar-free` and `p7zip-full`. Proprietary `unrar` may be needed for some RAR v5 archives but is harder to automate in Debian/Slim without non-free repos.
