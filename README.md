@@ -7,6 +7,36 @@ This project adds DevOps capabilities to the RapidRAR application, including:
 3.  **Kubernetes Support**: Manifests for deploying as a scalable service (DaemonSet + Ingress).
 4.  **PR Previews**: A design and CI prototype for ephemeral preview environments per Pull Request.
 
+## 🚀 Solution Showcase (Interview Highlights)
+
+| Challenge | Solution | Tech Stack |
+| :--- | :--- | :--- |
+| **Cross-Platform Support** | Multi-arch Docker Build (amd64/arm64) | Docker Buildx, QEMU |
+| **Max Cluster Utilization** | Kubernetes DaemonSet (One pod per node) | DaemonSet, K8s, Python |
+| **Safe PR Testing** | Ephemeral Namespace Isolation | GitHub Actions, Namespaces |
+| **Security & FinOps** | API Key Auth & Auto-Cleanup CronJob | FastAPI, K8s CronJob |
+
+### 🛠 Architecture Overview
+The core of this project is the **Ephemeral PR Environment** design, solving the "Shared Staging Conflict" problem.
+
+```mermaid
+graph LR
+    Dev[Developer] -->|Push PR #101| CI[GitHub Actions]
+    CI -->|Create| NS[Namespace: pr-101]
+    
+    subgraph K8s Cluster
+        Staging[Namespace: staging]
+        NS
+    end
+    
+    User -->|pr-101.example.com| NS
+    User -->|staging.example.com| Staging
+```
+
+### 💡 Key Design Decisions
+1.  **DaemonSet vs Deployment**: Used **DaemonSet** for Task 2 to strictly guarantee "one pod per node" for maximum computational coverage, as opposed to random scheduling.
+2.  **Namespace Isolation**: Chosen over header-based routing for cleaner isolation and easier cleanup (nuke the namespace = clean state).
+
 ## Deliverables
 
 ### Task 1: Docker
