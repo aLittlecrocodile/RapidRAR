@@ -10,10 +10,10 @@ graph TD
     User([Developer]) -->|Push/PR| GitHub[GitHub Repo]
     
     subgraph CI_CD [GitHub Actions]
-        Build[Build & Push Docker Image]
-        Deploy[Deploy PR Env]
-        Test[Run Automated Tests]
-        Cleanup[Cleanup Env (on close)]
+        Build["Build & Push Docker Image"]
+        Deploy["Deploy PR Env"]
+        Test["Run Automated Tests"]
+        Cleanup["Cleanup Env (on close)"]
     end
     
     GitHub -->|Trigger| CI_CD
