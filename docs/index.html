@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>RapidRAR DevOps Project</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reset.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/theme/dracula.min.css" id="theme">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/monokai.min.css">
+</head>
+<body>
+<div class="reveal">
+    <div class="slides">
+        <!-- Slide 1: Title -->
+        <section>
+            <h1>RapidRAR</h1>
+            <h3>Cloud-Native Distributed Recovery Platform</h3>
+            <p>
+                <small>Created by Aoyun</small>
+            </p>
+            <p>
+                <img src="https://img.shields.io/badge/Kubernetes-DaemonSet-blue" alt="k8s">
+                <img src="https://img.shields.io/badge/Docker-Multi--Arch-orange" alt="docker">
+            </p>
+        </section>
+
+        <!-- Slide 2: Overview Table -->
+        <section>
+            <h2>🚀 Project Overview</h2>
+            <table style="font-size: 0.6em;">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Challenge</th>
+                        <th>Solution</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Task 1</td>
+                        <td>Cross-Platform Support</td>
+                        <td><strong>Multi-arch Docker Build</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Task 2</td>
+                        <td>Max Cluster Utilization</td>
+                        <td><strong>K8s DaemonSet</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Task 3</td>
+                        <td>Safe PR Testing</td>
+                        <td><strong>Namespace Isolation</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- Slide 3: Task 2 Architecture -->
+        <section>
+            <h2>Task 2: Distributed Computing</h2>
+            <p>Why DaemonSet?</p>
+            <ul>
+                <li class="fragment">Guarantees <strong>one Pod per Node</strong>.</li>
+                <li class="fragment">Automatically scales with cluster growth.</li>
+                <li class="fragment">Perfect for CPU-bound tasks like cracking.</li>
+            </ul>
+        </section>
+
+        <!-- Slide 4: Task 3 Design -->
+        <section>
+            <h2>Task 3: Ephemeral Environments</h2>
+            <p style="font-size: 0.8em">The "Parallel Universe" Strategy</p>
+            <div class="mermaid">
+            graph LR
+                Dev[Developer] -->|PR| CI
+                CI -->|Deploy| NS[Namespace: pr-101]
+                User -->|pr-101.com| NS
+            </div>
+            <p style="font-size: 0.6em; margin-top: 20px;">Every PR gets a dedicated, isolated Namespace.</p>
+        </section>
+
+        <!-- Slide 5: Automation -->
+        <section>
+            <h2>CI/CD Workflow</h2>
+            <pre><code class="yaml" data-trim data-noescape>
+name: PR Deploy
+on: [pull_request]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: docker buildx build ...
+      - run: kubectl create ns rapidrar-pr-${{ pr.number }}
+      - run: python test_k8s.py  # <-- Automated Validation
+            </code></pre>
+        </section>
+
+        <!-- Slide 6: Bonus -->
+        <section>
+            <h2>✨ Bonus Features</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div style="background: #ffffff22; padding: 20px; border-radius: 10px;">
+                    <h4>Security</h4>
+                    <p style="font-size: 0.6em">API Key Authentication implemented in FastAPI.</p>
+                </div>
+                <div style="background: #ffffff22; padding: 20px; border-radius: 10px;">
+                    <h4>FinOps</h4>
+                    <p style="font-size: 0.6em">Daily CronJob to auto-delete zombie namespaces.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 7: Links -->
+        <section>
+            <h2>Thank You</h2>
+            <p>Check out the code:</p>
+            <ul>
+                <li><a href="https://github.com/aLittlecrocodile/RapidRAR">GitHub Repository</a></li>
+                <li><a href="DESIGN.md">Design Document</a></li>
+            </ul>
+        </section>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/highlight/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>
+    Reveal.initialize({
+        hash: true,
+        plugins: [ RevealHighlight ]
+    });
+    mermaid.initialize({ startOnLoad: true, theme: 'dark' });
+</script>
+</body>
+</html>
