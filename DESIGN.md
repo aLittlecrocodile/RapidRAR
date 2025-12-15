@@ -24,12 +24,12 @@ graph TD
     subgraph K8s [Kubernetes Cluster]
         Ingress[NGINX Ingress Controller]
         
-        subgraph Staging [Namespace: rapidrar-staging]
-            PodS[RapidRAR (Stable)]
+        subgraph Staging ["Namespace: rapidrar-staging"]
+            PodS["RapidRAR (Stable)"]
         end
         
-        subgraph PR_Env [Namespace: rapidrar-pr-123]
-            Pod123[RapidRAR (PR Version)]
+        subgraph PR_Env ["Namespace: rapidrar-pr-123"]
+            Pod123["RapidRAR (PR Version)"]
         end
         
         Ingress -->|Host: rapidrar.example.com| PodS
