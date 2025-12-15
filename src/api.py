@@ -13,6 +13,7 @@ import uvicorn
 from src.cracker import RARCracker
 from src.config import DEFAULT_CHARSET
 
+# Modified to trigger CI
 app = FastAPI(title="RapidRAR API", description="High-performance RAR password recovery API")
 
 class CrackResponse(BaseModel):
