@@ -2,7 +2,9 @@ name: Build and Push Docker Image
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - "main"
+      - "experiment/*"
     paths:
       - 'src/**'
       - 'Dockerfile'
@@ -44,6 +46,7 @@ jobs:
           images: ${{ env.REGISTRY }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=ref,event=branch
             type=sha,format=short
 
       - name: Build and push Docker image
