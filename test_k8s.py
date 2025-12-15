@@ -25,8 +25,12 @@ def test_k8s_deployment(url, rar_file_path):
                 'mask': '?d?d?d?d' # Assume numeric for quick test
             }
             
+            # Including X-API-Key header for authentication
+            # Using default 'dev-secret' which matches the fallback in api.py
+            headers = {"X-API-Key": "dev-secret"}
+
             start = time.time()
-            response = requests.post(f"{url}/crack", files=files, data=data, timeout=30)
+            response = requests.post(f"{url}/crack", files=files, data=data, headers=headers, timeout=30)
             elapsed = time.time() - start
             
             print(f"Status Code: {response.status_code}")

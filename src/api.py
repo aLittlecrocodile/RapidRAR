@@ -1,17 +1,31 @@
 import os
 import shutil
 import tempfile
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Security, Depends
 from fastapi.responses import JSONResponse
+from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
+import os
 
 # Import internal modules
 # Adjust import path if necessary based on where this file is placed relative to src/
 # If src/api.py, then:
 from src.cracker import RARCracker
 from src.config import DEFAULT_CHARSET
+
+# API Security
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+def get_api_key(api_key_header: str = Security(api_key_header)):
+    """Very simple API Key validation. In production, use database or Vault."""
+    expected_key = os.getenv("RAPIDRAR_API_KEY", "dev-secret")
+    if api_key_header == expected_key:
+        return api_key_header
+    raise HTTPException(status_code=403, detail="Could not validate credentials")
+
 
 # FastAPI app
 app = FastAPI(title="RapidRAR API", description="High-performance RAR password recovery API")
@@ -33,7 +47,8 @@ async def crack_archive(
     use_lowercase: bool = Form(False),
     use_uppercase: bool = Form(False),
     use_special: bool = Form(False),
-    backend: str = Form("auto")
+    backend: str = Form("auto"),
+    api_key: str = Depends(get_api_key)
 ):
     # Create a temporary directory to store the uploaded file
     with tempfile.TemporaryDirectory() as temp_dir:
