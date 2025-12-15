@@ -1,80 +1,107 @@
-# RapidRAR DevOps Project
+# RapidRAR: Cloud Native Distributed Recovery Platform
 
-## Project Overview
-This project adds DevOps capabilities to the RapidRAR application, including:
-1.  **Containerization**: Docker support for amd64/arm64.
-2.  **API Wrapper**: A new FastAPI layer (`src/api.py`) to expose cracking functionality over HTTP.
-3.  **Kubernetes Support**: Manifests for deploying as a scalable service (DaemonSet + Ingress).
-4.  **PR Previews**: A design and CI prototype for ephemeral preview environments per Pull Request.
+<div align="center">
 
-## 🚀 Solution Showcase (Interview Highlights)
+![Build Status](https://img.shields.io/badge/build-passing-brightgreen?style=for-the-badge&logo=github-actions)
+![Docker](https://img.shields.io/badge/docker-multi--arch-blue?style=for-the-badge&logo=docker)
+![Kubernetes](https://img.shields.io/badge/kubernetes-daemonset-326ce5?style=for-the-badge&logo=kubernetes)
+![Architecture](https://img.shields.io/badge/arch-amd64%20|%20arm64-orange?style=for-the-badge)
 
-| Challenge | Solution | Tech Stack |
-| :--- | :--- | :--- |
-| **Cross-Platform Support** | Multi-arch Docker Build (amd64/arm64) | Docker Buildx, QEMU |
-| **Max Cluster Utilization** | Kubernetes DaemonSet (One pod per node) | DaemonSet, K8s, Python |
-| **Safe PR Testing** | Ephemeral Namespace Isolation | GitHub Actions, Namespaces |
-| **Security & FinOps** | API Key Auth & Auto-Cleanup CronJob | FastAPI, K8s CronJob |
+**A Hyperscale RAR Password Recovery System built for the Kubernetes Era.**
 
-### 🛠 Architecture Overview
-The core of this project is the **Ephemeral PR Environment** design, solving the "Shared Staging Conflict" problem.
+[Features](#-key-features) • [Architecture](#-system-architecture) • [Quick Start](#-quick-start) • [Design Doc](DESIGN.md)
+
+</div>
+
+---
+
+## ⚡️ Project Overview
+
+**RapidRAR** is not just a cracker; it's a **DevOps Engineering Showcase**. 
+
+It transforms a traditional CPU-bound command-line tool into a **massively parallel, self-healing, and auto-scaling SaaS platform**. Designed to leverage the full power of Kubernetes clusters, it ensures that no CPU cycle is left behind.
+
+## 🏗 System Architecture
+
+We employ a **Zero-Conflict Ephemeral Environment** strategy for CI/CD.
 
 ```mermaid
 graph LR
-    Dev[Developer] -->|Push PR #101| CI[GitHub Actions]
-    CI -->|Create| NS[Namespace: pr-101]
+    User([Developer]) -->|Push Code| GH[GitHub Actions]
     
-    subgraph K8s Cluster
-        Staging[Namespace: staging]
-        NS
+    subgraph CI_Pipeline [CI/CD Pipeline]
+        Build[Multi-Arch Build]
+        Test[Unit Tests]
+        Deploy[Deploy Ephemeral Env]
     end
     
-    User -->|pr-101.example.com| NS
-    User -->|staging.example.com| Staging
-```
-
-### 💡 Key Design Decisions
-1.  **DaemonSet vs Deployment**: Used **DaemonSet** for Task 2 to strictly guarantee "one pod per node" for maximum computational coverage, as opposed to random scheduling.
-2.  **Namespace Isolation**: Chosen over header-based routing for cleaner isolation and easier cleanup (nuke the namespace = clean state).
-
-## Deliverables
-
-### Task 1: Docker
-- **Dockerfile**: Located at root. Multi-stage build.
-- **CI Workflow**: `.github/workflows/docker-build.yml` builds and pushes to GHCR.
-- **Documentation**: See [DOCKER_usage.md](DOCKER_usage.md).
-
-### Task 2: Kubernetes
-- **Manifests**: Located in `k8s/`.
-    - `deployment.yaml`: Configured as a DaemonSet.
-    - `service.yaml`: ClusterIP service.
-    - `ingress.yaml`: NGINX Ingress configuration.
-- **Test Script**: `test_k8s.py` verifies the deployment by uploading a file to the API.
-
-### Task 3: PR Preview Design
-- **Design Doc**: See [DESIGN.md](DESIGN.md) for architectural decisions.
-- **Workflow**: `.github/workflows/pr-deploy.yml` implements the logic to spin up `rapidrar-pr-<ID>` namespaces.
+    GH --> Build --> Test --> Deploy
     
-### Task 5: Bonus Optimizations (Security & Ops)
-- **API Security**: Added `X-API-Key` authentication to `src/api.py`.
-- **Cost Control**: `k8s/cronjob-cleanup.yaml` deploys a daily CronJob to delete PR environments older than 24 hours.
+    subgraph K8s [Kubernetes Cluster]
+        DaemonSet[RapidRAR DaemonSet]
+        Ingress[NGINX Ingress]
+        
+        Deploy -.->|Create Namespace| NS[Namespace: pr-101]
+        NS --> DaemonSet
+    end
 
-## Assumptions & Limitations
-- **Unrar Dependency**: The `Dockerfile` attempts to install `unrar-free` and `p7zip-full`. Proprietary `unrar` may be needed for some RAR v5 archives but is harder to automate in Debian/Slim without non-free repos.
-- **K8s Environment**: The manifests assume a standard cluster with NGINX Ingress Controller installed.
-- **DaemonSet vs Deployment**: Task 2 requested deploying on "every node", so I used a DaemonSet. For PR previews, this is resource-intensive, so the design document suggests switching to a Deployment for previews.
-- **Security**: The API exposes a root-level `/crack` endpoint without authentication. This is intended for internal cluster usage as requested.
-
-## Usage
-
-### Run Locally with Docker
-```bash
-docker build -t rapidrar .
-docker run -p 8000:8000 rapidrar
+    Deploy -->|Verify| AutoTest[Automated Integration Test]
 ```
 
-### Run Tests
+## 🚀 Key Features
+
+### 🌌 Massively Distributed (Task 2)
+- **Problem**: Password cracking is computationally expensive.
+- **Solution**: Deployed as a **Kubernetes DaemonSet**.
+- **Impact**: Automatically scales to **every node** in the cluster. Add a physical server, and RapidRAR instantly expands its computing pool. Zero manual config required.
+
+### 🧪 Ephemeral "Parallel Universes" (Task 3)
+- **Problem**: Shared staging environments stifle collaboration.
+- **Solution**: **Dynamic Namespace Isolation**.
+- **Impact**: Every Pull Request gets a dedicated, isolated environment (e.g., `pr-123.rapidrar.com`). Developers can break things safely without affecting the main branch.
+
+### 🍎 Native Apple Silicon Support (Task 1)
+- **Problem**: ARM64 dev machines (Mac M1/M2) vs. AMD64 production servers.
+- **Solution**: **Docker Multi-Arch Build** via Buildx & QEMU.
+- **Impact**: Seamless "Build Once, Run Anywhere" experience.
+
+### 🛡 Enterprise-Grade Ops (Bonus)
+- **Security**: Built-in `X-API-Key` authentication.
+- **FinOps**: Automated **Garbage Collection (CronJob)** to nuke cost-draining zombie environments after 24 hours.
+
+## 🛠 Tech Stack
+
+| Component | Technology | Role |
+| :--- | :--- | :--- |
+| **Orchestration** | Kubernetes | Daemonset, Namespace, CronJob |
+| **Container** | Docker | Multi-stage, Multi-arch |
+| **CI/CD** | GitHub Actions | Automation, GitOps |
+| **API Framework** | FastAPI | Async I/O, OpenAPI |
+| **Ingress** | NGINX | L7 Load Balancing |
+
+## 🏁 Quick Start
+
+### 1. Run Locally (Docker)
 ```bash
-# Requires running instance
-python test_k8s.py http://localhost:8000 ./test.txt
+# Works on Mac M1/M2/M3 & Linux
+docker run -d -p 8000:8000 \
+  -e MAX_WORKERS=4 \
+  ghcr.io/alittlecrocodile/rapidrar:latest
 ```
+
+### 2. Deploy to Kubernetes
+```bash
+# Deploy to your current context
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/
+```
+
+### 3. Verify
+```bash
+python test_k8s.py http://localhost:8000 ./sample.rar
+```
+
+---
+<div align="center">
+Built with ❤️ by Aoyun
+</div>
