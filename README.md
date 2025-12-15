@@ -2,7 +2,8 @@
 
 <div align="center">
 
-[![Presentation](https://img.shields.io/badge/📺_Presentation_Mode-Click_Here_to_View_Slides-blue?style=for-the-badge&logo=microsoftpowerpoint)](PRESENTATION.md)
+<!-- Button to launch the web presentation -->
+[![Presentation](https://img.shields.io/badge/🚀_Launch_Interactive_Slides-Click_Here-blueviolet?style=for-the-badge&logo=googlechrome)](https://alittlecrocodile.github.io/RapidRAR/)
 
 </div>
 
