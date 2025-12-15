@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: namespace-cleaner
+  namespace: rapidrar
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: namespace-cleaner-role
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["list", "get", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: namespace-cleaner-binding
+subjects:
+  - kind: ServiceAccount
+    name: namespace-cleaner
+    namespace: rapidrar
+roleRef:
+  kind: ClusterRole
+  name: namespace-cleaner-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: prune-old-namespaces
+  namespace: rapidrar
+spec:
+  schedule: "0 0 * * *" # Run daily at midnight
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: namespace-cleaner
+          containers:
+          - name: kubectl
+            image: bitnami/kubectl:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Checking for old namespaces..."
+              # List namespaces matching 'rapidrar-pr-*'
+              # Note: Real implementation would verify creationTimestamp.
+              # This script deletes namespaces matching the pattern created > 24h ago
+              
+              kubectl get ns -o json | jq -r '
+                .items[] | 
+                select(.metadata.name | test("rapidrar-pr-")) | 
+                select((now - (.metadata.creationTimestamp | fromdateiso8601)) > 86400) | 
+                .metadata.name
+              ' | xargs -r kubectl delete ns
+            
+          restartPolicy: OnFailure
