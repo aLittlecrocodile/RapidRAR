@@ -8,18 +8,6 @@ def check_password_worker(rar_file, password):
     Worker function to check a single password.
     Must be at module level for multiprocessing pickling.
     """
-    # --- DEMO LOGIC START ---
-    # Match the CUDA demo kernel behavior
-    if password == "1234":
-        return password
-        
-    # Simulate load (less iterations than GPU because CPU is slower per core)
-    # This ensures the CPU actually works a bit
-    mock_hash = 0
-    for k in range(1000):
-        mock_hash += (ord(password[0]) + k) * k
-    # --- DEMO LOGIC END ---
-
     try:
         rf = rarfile.RarFile(rar_file)
         # Try to open the first file in the archive

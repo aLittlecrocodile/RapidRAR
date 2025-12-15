@@ -1,7 +1,8 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: rapidrar-daemonset
+  name: rapidrar
+  namespace: rapidrar
   labels:
     app: rapidrar
 spec:
@@ -15,16 +16,16 @@ spec:
     spec:
       containers:
       - name: rapidrar
-        image: ghcr.io/alittlecrocodile/rapidrar:${GITHUB_SHA}
-        imagePullPolicy: IfNotPresent
-        command: ["uvicorn"]
-        args: ["src.api:app", "--host", "0.0.0.0", "--port", "8000"]
+        image: ghcr.io/your-username/rapidrar:latest # Replace with actual image path
         ports:
         - containerPort: 8000
         resources:
           limits:
-            memory: 200Mi
-            cpu: 500m
+            cpu: "2"
+            memory: "2Gi"
           requests:
-            memory: 100Mi
-            cpu: 100m
+            cpu: "500m"
+            memory: "512Mi"
+        env:
+        - name: MAX_WORKERS
+          value: "4"

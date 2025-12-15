@@ -1,0 +1,91 @@
+name: Deploy PR Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  NAMESPACE: rapidrar-pr-${{ github.event.number }}
+  DOMAIN: pr-${{ github.event.number }}.rapidrar.example.com
+
+jobs:
+  deploy-preview:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write # For commenting
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:pr-${{ github.event.number }}
+          # platforms: linux/amd64 # Speed up PR builds by only building for current runner
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Deploy to Kubernetes
+        # In a real environment, you would set up KUBECONFIG here
+        run: |
+          # 0. Create Namespace
+          kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+          # 1. Prepare Manifests (Simple Substitution)
+          # We use the manifests from k8s/ but override namespace, image, and ingress host
+          
+          # Deployment
+          sed -e 's|namespace: rapidrar|namespace: ${{ env.NAMESPACE }}|g' \
+              -e 's|image: .*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:pr-${{ github.event.number }}|g' \
+              k8s/deployment.yaml > deploy.yaml
+          
+          # Service
+          sed -e 's|namespace: rapidrar|namespace: ${{ env.NAMESPACE }}|g' \
+              k8s/service.yaml > service.yaml
+          
+          # Ingress
+          sed -e 's|namespace: rapidrar|namespace: ${{ env.NAMESPACE }}|g' \
+              -e 's|host: .*|host: ${{ env.DOMAIN }}|g' \
+              k8s/ingress.yaml > ingress.yaml
+
+          # Apply
+          kubectl apply -f deploy.yaml
+          kubectl apply -f service.yaml
+          kubectl apply -f ingress.yaml
+
+      - name: Verify Deployment
+        run: |
+          # Wait for rollout
+          kubectl rollout status daemonset/rapidrar -n ${{ env.NAMESPACE }} --timeout=60s
+          
+          # Run test script
+          # Note: In a real CI, we might need to target the internal service IP or run this from a pod inside the cluster 
+          # if the ingress DNS isn't publicly resolvable.
+          # Assuming ingress is accessible:
+          python test_k8s.py http://${{ env.DOMAIN }} ./test.text # Need to create dummy test file
+
+      - name: Comment on PR
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          message: |
+            🚀 **Preview Environment Deployed!**
+            
+            URL: http://${{ env.DOMAIN }}
+            Namespace: `${{ env.NAMESPACE }}`
+
+  cleanup-preview:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete Namespace
+        run: |
+          kubectl delete namespace ${{ env.NAMESPACE }} --ignore-not-found

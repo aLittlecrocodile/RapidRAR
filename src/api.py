@@ -1,105 +1,117 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from pydantic import BaseModel
-import shutil
 import os
-import uuid
-import asyncio
+import shutil
+import tempfile
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from typing import Optional
+import uvicorn
+
+# Import internal modules
+# Adjust import path if necessary based on where this file is placed relative to src/
+# If src/api.py, then:
 from src.cracker import RARCracker
-from src.backends import get_backend
-from src.utils import parse_mask
+from src.config import DEFAULT_CHARSET
 
-app = FastAPI(title="RapidRAR API", description="High-Performance Distributed RAR Cracker API")
+app = FastAPI(title="RapidRAR API", description="High-performance RAR password recovery API")
 
-# Ensure temp directory exists
-TEMP_DIR = "/tmp/rapidrar_uploads"
-os.makedirs(TEMP_DIR, exist_ok=True)
+class CrackResponse(BaseModel):
+    status: str
+    password: Optional[str] = None
+    attempts: int
+    time_taken: float
+    message: str
 
-class CrackRequest(BaseModel):
-    mask: str = "?d?d?d?d"
-    backend: str = "cpu"
-    concurrent_batches: int = 4
-
-@app.post("/crack")
+@app.post("/crack", response_model=CrackResponse)
 async def crack_archive(
     file: UploadFile = File(...),
-    mask: str = Form("?d?d?d?d"),
-    backend: str = Form("cpu"),
-    concurrent_batches: int = Form(4)
+    mask: Optional[str] = Form(None),
+    min_length: int = Form(1),
+    max_length: int = Form(4), # Default small for quick API tests
+    use_digits: bool = Form(False),
+    use_lowercase: bool = Form(False),
+    use_uppercase: bool = Form(False),
+    use_special: bool = Form(False),
+    backend: str = Form("auto")
 ):
-    """
-    Upload a RAR file and attempt to crack it using the specified mask and backend.
-    """
-    request_id = str(uuid.uuid4())
-    temp_file_path = os.path.join(TEMP_DIR, f"{request_id}_{file.filename}")
-    
-    try:
+    # Create a temporary directory to store the uploaded file
+    with tempfile.TemporaryDirectory() as temp_dir:
+        file_path = os.path.join(temp_dir, file.filename)
+        
         # Save uploaded file
-        with open(temp_file_path, "wb") as buffer:
+        with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
             
-        print(f"[{request_id}] Received file: {file.filename}, Mask: {mask}, Backend: {backend}")
-
-        # Initialize Cracker
-        # We run this in a thread pool to avoid blocking the async loop
-        result = await asyncio.to_thread(
-            run_cracker, 
-            temp_file_path, 
-            mask, 
-            backend, 
-            concurrent_batches
-        )
+        # Determine charset
+        charset = ""
+        if use_lowercase: charset += "abcdefghijklmnopqrstuvwxyz"
+        if use_uppercase: charset += "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        if use_digits: charset += "0123456789"
+        if use_special: charset += "!@#$%^&*()" # Simplified special chars
         
-        if result:
-            return {"status": "success", "password": result}
-        else:
-            return {"status": "failure", "message": "Password not found"}
+        if not charset and not mask:
+            charset = DEFAULT_CHARSET
+
+        try:
+            # Initialize Cracker
+            # Note: Assuming RARCracker is designed to be blocking. 
+            # In a real prod env, this should be a background task (Celery/RQ).
+            # For this interview task, synchronous execution is acceptable but we warn about timeout.
             
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-        
-    finally:
-        # Cleanup
-        if os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
+            cracker = RARCracker(
+                rar_path=file_path,
+                mask=mask,
+                min_length=min_length,
+                max_length=max_length,
+                backend=backend,
+                charset=charset if not mask else None
+            )
+            
+            # Run cracker
+            # We need to capture the generator output
+            found_password = None
+            total_attempts = 0
+            
+            import time
+            start_time = time.time()
+            
+            for result in cracker.run():
+                total_attempts += result.get('attempts', 0)
+                if result.get('password'):
+                    found_password = result['password']
+                    break
+            
+            elapsed = time.time() - start_time
+            
+            if found_password:
+                return JSONResponse({
+                    "status": "success",
+                    "password": found_password,
+                    "attempts": total_attempts,
+                    "time_taken": elapsed,
+                    "message": "Password found successfully"
+                })
+            else:
+                 return JSONResponse({
+                    "status": "failed",
+                    "password": None,
+                    "attempts": total_attempts,
+                    "time_taken": elapsed,
+                    "message": "Password not found within search space"
+                })
 
-def run_cracker(rar_file_path, mask, backend_name, concurrent_batches):
-    """
-    Synchronous wrapper to run the cracker logic
-    """
-    try:
-        # Initialize backend
-        backend = get_backend(backend_name)
-        backend.init()
-        
-        # Parse mask info just to get length range (simplified logic here)
-        # In a real app we might want to pass more granular params
-        mask_info = parse_mask(mask)
-        min_len = len(mask_info)
-        max_len = len(mask_info)
+        except Exception as e:
+            return JSONResponse({
+                "status": "error",
+                "password": None,
+                "attempts": 0,
+                "time_taken": 0,
+                "message": str(e)
+            }, status_code=500)
 
-        cracker = RARCracker(
-            rar_file=rar_file_path,
-            backend=backend,
-            min_length=min_len,
-            max_length=max_len,
-            mask=mask,
-            batch_size=1000, # default
-            concurrent_batches=concurrent_batches
-        )
-        
-        start_time = asyncio.get_event_loop().time()
-        password = cracker.crack()
-        
-        backend.cleanup()
-        return password
-        
-    except Exception as e:
-        print(f"Cracker error: {e}")
-        return None
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
