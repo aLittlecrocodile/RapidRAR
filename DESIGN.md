@@ -5,6 +5,43 @@ Enable safe, isolated testing of Pull Requests (PRs) within the shared staging K
 
 ## Architecture
 
+```mermaid
+graph TD
+    User([Developer]) -->|Push/PR| GitHub[GitHub Repo]
+    
+    subgraph CI_CD [GitHub Actions]
+        Build[Build & Push Docker Image]
+        Deploy[Deploy PR Env]
+        Test[Run Automated Tests]
+        Cleanup[Cleanup Env (on close)]
+    end
+    
+    GitHub -->|Trigger| CI_CD
+    
+    Build --> REGISTRY[(GHCR)]
+    Deploy --> K8s
+    
+    subgraph K8s [Kubernetes Cluster]
+        Ingress[NGINX Ingress Controller]
+        
+        subgraph Staging [Namespace: rapidrar-staging]
+            PodS[RapidRAR (Stable)]
+        end
+        
+        subgraph PR_Env [Namespace: rapidrar-pr-123]
+            Pod123[RapidRAR (PR Version)]
+        end
+        
+        Ingress -->|Host: rapidrar.example.com| PodS
+        Ingress -->|Host: pr-123.rapidrar.example.com| Pod123
+    end
+
+    Deploy -.->|Create/Update| PR_Env
+    Test -.->|Verify| Pod123
+    Cleanup -.->|Delete| PR_Env
+```
+
+
 ### 1. Namespace Strategy
 To ensure isolation, we will deploy each PR into its own **ephemeral Kubernetes Namespace**.
 - **Naming Convention**: `rapidrar-pr-<PR_NUMBER>` (e.g., `rapidrar-pr-123`).
