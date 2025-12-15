@@ -27,7 +27,12 @@ except ImportError:
     SourceModule = None
 import psutil
 
-from src.cuda_kernels import get_kernel_code
+try:
+    from src.cuda_kernels import get_kernel_code
+except ImportError:
+    def get_kernel_code():
+        raise RuntimeError("CUDA kernels not available")
+
 from src.config import DEFAULT_THREADS_PER_BLOCK, DEFAULT_MAX_BLOCKS
 
 logger = logging.getLogger(__name__)
